@@ -525,6 +525,16 @@ textarea.paste{width:100%;min-height:96px;font:15px/1.4 var(--font-body);color:v
   function payload(){
     return {v:1, n:studentName||'Stagiaire', t:startedAt, u:Date.now(), s:[...scores], d:[...finished], x:[...times], e:{1:errs[1],2:errs[2],3:errs[3],4:errs[4]}};
   }
+  function listen(){
+    if(net.listening || !net.fb) return;
+    net.listening=true;
+    net.fb.onValue(net.fb.ref(net.fb.db,DB_PATH),snap=>{
+      const val=snap.val()||{};
+      live=Object.entries(val).map(([k,v])=>({...v,_k:k})).filter(x=>x && x.v===1 && Array.isArray(x.s));
+      liveFailed=false;
+      renderTrainer();
+    },err=>{ liveFailed=true; net.err=(err&&err.code)||''; renderTrainer(); });
+  }
   async function initNet(){
     try{
       const base='https://www.gstatic.com/firebasejs/'+FB_VERSION+'/';
@@ -533,14 +543,7 @@ textarea.paste{width:100%;min-height:96px;font:15px/1.4 var(--font-body);color:v
       net.fb={db,ref:dbMod.ref,set:dbMod.set,push:dbMod.push,onValue:dbMod.onValue,remove:dbMod.remove};
       net.key=dbMod.push(dbMod.ref(db,DB_PATH)).key;
       net.state='ok';
-      if(isTrainerView){
-        dbMod.onValue(dbMod.ref(db,DB_PATH),snap=>{
-          const val=snap.val()||{};
-          live=Object.entries(val).map(([k,v])=>({...v,_k:k})).filter(x=>x && x.v===1 && Array.isArray(x.s));
-          liveFailed=false;
-          renderTrainer();
-        },err=>{ liveFailed=true; net.err=(err&&err.code)||''; renderTrainer(); });
-      }
+      if(isTrainerView) listen();
     }catch(_){ net.fb=null; net.state='fail'; net.err='chargement de Firebase impossible'; }
     if(isTrainerView) renderTrainer();
   }
@@ -629,7 +632,7 @@ textarea.paste{width:100%;min-height:96px;font:15px/1.4 var(--font-body);color:v
       }).join('')+'</tbody></table>';
   }
   function csvCell(v){ v=String(v); return /[;"\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; }
-  function openTrainer(){ $('#pinbox').hidden=true; renderTrainer(); go('trainer'); }
+  function openTrainer(){ $('#pinbox').hidden=true; renderTrainer(); go('trainer'); netReady.then(listen); }
   $('#trainerBtn').addEventListener('click',()=>{
     if(isTrainerView){ openTrainer(); return; }
     $('#pinbox').hidden=false; $('#pin').focus();
